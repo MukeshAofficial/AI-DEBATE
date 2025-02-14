@@ -85,11 +85,6 @@ def generate_gemini_response(audio_base64: str, conversation_history: list) -> s
 5. **Weakness Exploitation**: Identify logical fallacies or gaps in your opponent's reasoning and highlight them.
 6. **Ethos/Pathos/Logos**: Use a mix of credibility (ethos), logic (logos), and occasional emotional framing (pathos) if strategically useful.
 
-Example response format:
-"Thesis: [Your stance].
-Argument 1: [Core point + evidence].
-Counterargument Rebuttal: [Address likely opposition].
-Argument 2: [Next point + evidence]..."
 {history_summary}
 Now, respond to the following audio clip:
 """
