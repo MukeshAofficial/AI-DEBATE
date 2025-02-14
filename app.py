@@ -30,10 +30,10 @@ model = genai.GenerativeModel('gemini-1.5-pro')
 
 
 origins = [
-    "http://localhost", 
+    "http://localhost",
     "http://localhost:8000",
     "http://localhost:3000",
-    "*",  
+    "*",
 ]
 
 app.add_middleware(
@@ -50,6 +50,12 @@ class DebateTurnResponse(BaseModel):
     ai_response_text: str
     ai_response_audio_base64: str
     conversation_id: str
+
+
+class AudioUploadForm(BaseModel):
+    audio_data: str
+    conversation_id: str
+    user_prompt: str  # Add the user prompt
 
 
 # --- Utility Functions ---
@@ -70,24 +76,11 @@ def save_conversation_history(conversation_id: str, user_audio_base64: str, ai_r
     })
 
 
-def generate_gemini_response(audio_base64: str, conversation_history: list) -> str:
+def generate_gemini_response(audio_base64: str, conversation_history: list, user_prompt: str) -> str:
     history_summary = "\n".join([f"AI: {turn['ai_response']}" for turn in conversation_history])
 
-    prompt = f"""You are an expert AI debater skilled in logic.
-1. **Delivery**: Prioritize clarity over emotional appeals.
-2. **Structure**:
-    - Start with a clear thesis statement.
-    - Present 2-3 strongest arguments, each supported by examples or data.
-    - Preemptively address counterarguments (e.g., "One might argue X, but this fails because Y").
-    - Conclude with a summary reinforcing your stance.
-3. **Tone**: Stay calm, respectful, and focused on logic. Avoid personal attacks.
-4. **Adaptation**: If your opponent raises new points, directly address them before advancing your own arguments.
-5. **Weakness Exploitation**: Identify logical fallacies or gaps in your opponent's reasoning and highlight them.
-6. **Ethos/Pathos/Logos**: Use a mix of credibility (ethos), logic (logos), and occasional emotional framing (pathos) if strategically useful.
-
-{history_summary}
-Now, respond to the following audio clip:
-"""
+    # Use the user-provided prompt
+    prompt = user_prompt + "\n" + history_summary + "\nNow, respond to the following audio clip:"
 
     try:
         contents = [
@@ -122,19 +115,18 @@ def text_to_speech(text: str) -> str:
 
 
 # --- API Endpoints ---
-class AudioUploadForm(BaseModel):
-    audio_data: str
-    conversation_id: str
 
 
 @app.post("/debate-turn/", response_model=DebateTurnResponse)
 async def debate_turn(form_data: AudioUploadForm):
     conversation_id = form_data.conversation_id
     audio_base64 = form_data.audio_data
+    user_prompt = form_data.user_prompt  # Get the user prompt
 
     conversation_history = load_conversation_history(conversation_id)
 
-    ai_response_text = generate_gemini_response(audio_base64, conversation_history)
+    # Pass the user prompt to generate_gemini_response
+    ai_response_text = generate_gemini_response(audio_base64, conversation_history, user_prompt)
 
     ai_response_audio_base64 = text_to_speech(ai_response_text)
 

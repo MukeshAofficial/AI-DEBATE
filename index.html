@@ -9,7 +9,6 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css" rel="stylesheet" />
     <style>
-        /* ... (Your CSS styles from the previous example) ... */
         .debate-transcript {
             max-height: 400px;
             overflow-y: auto;
@@ -38,6 +37,21 @@
             @apply bg-gray-800 rounded-lg p-6 mb-6 border border-gray-700;
             min-height: 200px;
         }
+        .loader {
+            border-radius: 50%;
+            border-width: 0.25rem;
+            border-color: #ddd; /* Lighter gray */
+            border-top-color: #6366f1; /* Blue */
+            animation: loader-spin 1s linear infinite;
+        }
+        @keyframes loader-spin {
+            0% {
+                transform: rotate(0deg);
+            }
+            100% {
+                transform: rotate(360deg);
+            }
+        }
     </style>
 </head>
 
@@ -52,16 +66,26 @@
         <!-- AI Debater -->
         <div class="speaker-box animate__animated animate__fadeInDown animate__delay-0.5s mb-8">
             <div class="speaker-turn-indicator" id="aiDebaterTurnIndicator"></div>
-            <h3 class="text-xl font-semibold text-purple-400 mb-3"></h3>
+            <h3 class="text-xl font-semibold text-purple-400 mb-3">AI Debater</h3>
             <div class="flex justify-center">
                 <div id="aiThinkingIndicator" class="hidden">
-                    <div
-                        class="loader ease-linear border-2 border-t-2 border-gray-200 h-8 w-8 rounded-full animate-spin">
-                    </div>
+                    <div class="loader"></div>
                     <p class="text-sm text-gray-400 mt-2">Thinking...</p>
                 </div>
                 <p id="aiDebaterStatus" class="text-sm text-gray-400"></p>
             </div>
+        </div>
+
+        <!-- Prompt Input -->
+        <div class="mb-6 animate__animated animate__fadeIn animate__delay-1s">
+            <label for="systemPrompt" class="block text-gray-100 text-sm font-bold mb-2">System Prompt:</label>
+            <textarea id="systemPrompt"
+                class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline bg-gray-800 text-gray-200 border-gray-700"
+                rows="4" placeholder="Enter your system prompt here..."></textarea>
+            <button id="savePromptButton"
+                class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline mt-2">
+                Save Prompt
+            </button>
         </div>
 
         <!-- Content Container -->
@@ -102,17 +126,15 @@
         const aiDebaterStatus = document.getElementById('aiDebaterStatus');
         const aiDebaterTurnIndicator = document.getElementById('aiDebaterTurnIndicator');
         const aiThinkingIndicator = document.getElementById('aiThinkingIndicator');
+        const systemPromptInput = document.getElementById('systemPrompt');
+        const savePromptButton = document.getElementById('savePromptButton');
 
         let mediaRecorder;
         let audioChunks = [];
         let isListening = false;
-        let conversationId = localStorage.getItem('conversationId') || generateConversationId(); // Unique ID for the conversation
+        let conversationId = localStorage.getItem('conversationId') || crypto.randomUUID();
+        let userPrompt = ""; //Store the prompt
 
-        function generateConversationId() {
-            const newId = crypto.randomUUID();
-            localStorage.setItem('conversationId', newId);
-            return newId;
-        }
 
         function displayTranscriptMessage(speaker, message) {
             const messageElement = document.createElement('p');
@@ -140,7 +162,6 @@
             setAiDebaterStatus("");
             deactivateTurnIndicator(aiDebaterTurnIndicator);
             aiThinkingIndicator.classList.add('hidden');
-            aiThinkingIndicator.classList.remove('flex');
         }
 
         async function startListening() {
@@ -149,21 +170,19 @@
                 mediaRecorder = new MediaRecorder(stream);
                 audioChunks = [];
 
-                mediaRecorder.ondataavailable = event => {
-                    audioChunks.push(event.data);
-                };
+                mediaRecorder.ondataavailable = event => audioChunks.push(event.data);
 
                 mediaRecorder.onstop = async () => {
                     const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
                     const audioBase64 = await blobToBase64(audioBlob);
                     displayTranscriptMessage("You", "Recording Finished. Sending to AI...");
-                    await sendAudioToBackend(audioBase64); // Send the recorded audio to backend
-                    resetUIButtons(); // Reactivate listen, diable speak.
+                    await sendAudioToBackend(audioBase64);
+                    resetUIButtons();
                 };
 
                 mediaRecorder.start();
-                isListening = true; // Set listening status
-                listenButton.textContent = "Listening... (Click again to stop)"; // Change button label
+                isListening = true;
+                listenButton.textContent = "Listening... (Click again to stop)";
             } catch (error) {
                 console.error("Error accessing microphone:", error);
                 setAiDebaterStatus("Error: Could not access microphone.");
@@ -179,14 +198,17 @@
             }
         }
 
-        // Toggle the listening state
         listenButton.addEventListener('click', () => {
             if (!isListening) {
+                if (userPrompt === "") {
+                    alert("Please save a prompt first.");
+                    return;
+                }
                 startListening();
-                speakButton.disabled = true; // Diable speak during listening
+                speakButton.disabled = true;
             } else {
                 stopListening();
-                speakButton.disabled = true; // Disable speak as stopping.
+                speakButton.disabled = true;
                 listenButton.disabled = true;
                 setAiDebaterStatus("Stopping recording...");
                 deactivateTurnIndicator(aiDebaterTurnIndicator);
@@ -199,25 +221,32 @@
             setAiDebaterStatus("Thinking...");
             activateTurnIndicator(aiDebaterTurnIndicator);
             aiThinkingIndicator.classList.remove('hidden');
-            aiThinkingIndicator.classList.add('flex');
-            console.log("Speaking started");
         });
 
-        // Convert Blob to Base64
+        savePromptButton.addEventListener('click', () => {
+            userPrompt = systemPromptInput.value.trim();
+            if (userPrompt === "") {
+                alert("Please enter a prompt.");
+                return;
+            }
+            speakButton.disabled = false; //Enable speak button after prompt is saved
+            console.log("Prompt saved:", userPrompt);
+            alert("Prompt saved successfully!"); //Confirm to the user
+
+        });
+
         function blobToBase64(blob) {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
-                reader.onloadend = () => resolve(reader.result.split(',')[1]); // Remove the Data URI prefix
+                reader.onloadend = () => resolve(reader.result.split(',')[1]);
                 reader.onerror = reject;
                 reader.readAsDataURL(blob);
             });
         }
 
-
-        // Send audio to backend
         async function sendAudioToBackend(audioBase64) {
             try {
-                const response = await fetch('http://localhost:8000/debate-turn/', { // Backend URL
+                const response = await fetch('http://localhost:8000/debate-turn/', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -225,6 +254,7 @@
                     body: JSON.stringify({
                         audio_data: audioBase64,
                         conversation_id: conversationId,
+                        user_prompt: userPrompt,
                     }),
                 });
 
@@ -244,37 +274,22 @@
             }
         }
 
-        // Function to play audio from Base64 data
+
         function playAudioFromBase64(base64Audio) {
-            const audio = new Audio(`data:audio/mpeg;base64,${base64Audio}`);
-            audio.play().catch(error => {
-                console.error("Error playing audio:", error);
-                setAiDebaterStatus("Error playing AI audio.");
-            });
+            if(base64Audio){
+                const audio = new Audio(`data:audio/mpeg;base64,${base64Audio}`);
+                audio.play().catch(error => {
+                    console.error("Error playing audio:", error);
+                    setAiDebaterStatus("Error playing AI audio.");
+                });
+            } else {
+                console.warn("No audio data received from the server.");
+                setAiDebaterStatus("AI did not provide an audio response.");
+            }
         }
 
         resetUIButtons();
     </script>
-
-    <style>
-        @keyframes loader-spin {
-            0% {
-                transform: rotate(0deg);
-            }
-
-            100% {
-                transform: rotate(360deg);
-            }
-        }
-
-        .loader {
-            border-radius: 50%;
-            border-width: 0.25rem;
-            border-color: theme('colors.gray.200');
-            border-top-color: theme('colors.blue.500');
-            animation: loader-spin 1s linear infinite;
-        }
-    </style>
 </body>
 
 </html>
