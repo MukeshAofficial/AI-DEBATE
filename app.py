@@ -5,12 +5,13 @@ import os
 import uuid
 import base64
 import google.generativeai as genai
-from gtts import gTTS  # Import gTTS
 import io
 from fastapi.responses import HTMLResponse
+import requests  # Import the requests library
 
 
 app = FastAPI()
+
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root():
@@ -20,7 +21,8 @@ async def read_root():
 
 
 # --- Configuration ---
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+DEEPGRAM_API_KEY = os.environ.get("DEEPGRAM_API_KEY")  # Get Deepgram API key from environment
 AUDIO_UPLOAD_DIR = "audio_uploads"
 CONVERSATION_HISTORY = {}
 
@@ -33,6 +35,8 @@ origins = [
     "http://localhost",
     "http://localhost:8000",
     "http://localhost:3000",
+    "https://ai-debate.onrender.com",
+
     "*",
 ]
 
@@ -56,6 +60,7 @@ class AudioUploadForm(BaseModel):
     audio_data: str
     conversation_id: str
     user_prompt: str  # Add the user prompt
+    selected_voice: str  # Add selected voice
 
 
 # --- Utility Functions ---
@@ -102,33 +107,46 @@ def generate_gemini_response(audio_base64: str, conversation_history: list, user
         raise HTTPException(status_code=500, detail=f"Error generating response from Gemini API: {str(e)}")
 
 
-def text_to_speech(text: str) -> str:
+# Deepgram Text-to-Speech function (using requests)
+def text_to_speech(text: str, voice_model: str = "aura-asteria-en") -> str:
     try:
-        tts = gTTS(text=text, lang='en')
-        mp3_fp = io.BytesIO()  # Use BytesIO
-        tts.write_to_fp(mp3_fp)
-        mp3_fp.seek(0)  # Important: Reset the file pointer to the beginning
-        audio_base64 = base64.b64encode(mp3_fp.read()).decode("utf-8")
-        return audio_base64
+        url = f"https://api.deepgram.com/v1/speak?model={voice_model}"
+        headers = {
+            "Authorization": f"Token {DEEPGRAM_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "text": text
+        }
+
+        response = requests.post(url, headers=headers, json=payload)
+
+        if response.status_code == 200:
+            audio_bytes = response.content
+            audio_base64 = base64.b64encode(audio_bytes).decode("utf-8")
+            return audio_base64
+        else:
+            raise HTTPException(status_code=response.status_code,
+                                detail=f"Deepgram API Error: {response.status_code} - {response.text}")
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error during Text-to-Speech conversion: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error during Text-to-Speech conversion with Deepgram: {str(e)}")
 
 
 # --- API Endpoints ---
-
-
 @app.post("/debate-turn/", response_model=DebateTurnResponse)
 async def debate_turn(form_data: AudioUploadForm):
     conversation_id = form_data.conversation_id
     audio_base64 = form_data.audio_data
-    user_prompt = form_data.user_prompt  # Get the user prompt
+    user_prompt = form_data.user_prompt
+    selected_voice = form_data.selected_voice  # Get the selected voice
 
     conversation_history = load_conversation_history(conversation_id)
 
     # Pass the user prompt to generate_gemini_response
     ai_response_text = generate_gemini_response(audio_base64, conversation_history, user_prompt)
 
-    ai_response_audio_base64 = text_to_speech(ai_response_text)
+    ai_response_audio_base64 = text_to_speech(ai_response_text, selected_voice)
 
     save_conversation_history(conversation_id, audio_base64, ai_response_text)
 

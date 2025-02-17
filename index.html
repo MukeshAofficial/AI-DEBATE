@@ -37,17 +37,22 @@
             @apply bg-gray-800 rounded-lg p-6 mb-6 border border-gray-700;
             min-height: 200px;
         }
+
         .loader {
             border-radius: 50%;
             border-width: 0.25rem;
-            border-color: #ddd; /* Lighter gray */
-            border-top-color: #6366f1; /* Blue */
+            border-color: #ddd;
+            /* Lighter gray */
+            border-top-color: #6366f1;
+            /* Blue */
             animation: loader-spin 1s linear infinite;
         }
+
         @keyframes loader-spin {
             0% {
                 transform: rotate(0deg);
             }
+
             100% {
                 transform: rotate(360deg);
             }
@@ -76,22 +81,37 @@
             </div>
         </div>
 
-        <!-- Prompt Input -->
-        <div class="mb-6 animate__animated animate__fadeIn animate__delay-1s">
-            <label for="systemPrompt" class="block text-gray-100 text-sm font-bold mb-2">System Prompt:</label>
-            <textarea id="systemPrompt"
-                class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline bg-gray-800 text-gray-200 border-gray-700"
-                rows="4" placeholder="Enter your system prompt here..."></textarea>
-            <button id="savePromptButton"
-                class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline mt-2">
-                Save Prompt
-            </button>
-        </div>
+        <!-- Voice Selection -->
+<div class="mb-6 animate__animated animate__fadeIn animate__delay-0.75s">
+    <label for="voiceSelect" class="block text-gray-100 text-sm font-bold mb-2">Select Voice:</label>
+    <select id="voiceSelect"
+        class="shadow appearance-none border rounded w-full py-2 px-3 **text-gray-100** leading-tight focus:outline-none focus:shadow-outline bg-gray-800 text-gray-200 border-gray-700">
+        <option value="aura-asteria-en">Aura Asteria (English US, Female)</option>
+        <option value="aura-luna-en">Aura Luna (English US, Female)</option>
+        <option value="aura-stella-en">Aura Stella (English US, Female)</option>
+        <option value="aura-athena-en">Aura Athena (English UK, Female)</option>
+        <option value="aura-hera-en">Aura Hera (English US, Female)</option>
+        <option value="aura-orion-en">Aura Orion (English US, Male)</option>
+        <option value="aura-arcas-en">Aura Arcas (English US, Male)</option>
+        <option value="aura-perseus-en">Aura Perseus (English US, Male)</option>
+        <option value="aura-angus-en">Aura Angus (English Ireland, Male)</option>
+        <option value="aura-orpheus-en">Aura Orpheus (English US, Male)</option>
+        <option value="aura-helios-en">Aura Helios (English UK, Male)</option>
+        <option value="aura-zeus-en">Aura Zeus (English US, Male)</option>
+    </select>
+</div>
 
-        <!-- Content Container -->
-        <div class="content-container animate__animated animate__fadeIn animate__delay-1s">
-            <!-- Empty container for content -->
-        </div>
+<!-- Prompt Input -->
+<div class="mb-6 animate__animated animate__fadeIn animate__delay-1s">
+    <label for="systemPrompt" class="block text-gray-100 text-sm font-bold mb-2">System Prompt:</label>
+    <textarea id="systemPrompt"
+        class="shadow appearance-none border rounded w-full py-2 px-3 **text-gray-100** leading-tight focus:outline-none focus:shadow-outline bg-gray-800 text-gray-200 border-gray-700"
+        rows="4" placeholder="Enter your system prompt here..."></textarea>
+    <button id="savePromptButton"
+        class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline mt-2">
+        Save Prompt
+    </button>
+</div>
 
         <!-- Control Buttons -->
         <div class="flex space-x-4 justify-center mb-8 animate__animated animate__fadeInUp animate__delay-1.5s">
@@ -104,6 +124,12 @@
                 <i class="material-icons align-middle mr-2">record_voice_over</i> Speak
             </button>
         </div>
+
+        <!-- Content Container -->
+        <div class="content-container animate__animated animate__fadeIn animate__delay-1s">
+            <!-- Empty container for content -->
+        </div>
+
 
         <!-- Debate Transcript -->
         <section class="mb-12 animate__animated animate__fadeIn animate__delay-2s">
@@ -128,17 +154,24 @@
         const aiThinkingIndicator = document.getElementById('aiThinkingIndicator');
         const systemPromptInput = document.getElementById('systemPrompt');
         const savePromptButton = document.getElementById('savePromptButton');
+        const voiceSelect = document.getElementById('voiceSelect'); // Get the voice selection element
 
         let mediaRecorder;
         let audioChunks = [];
         let isListening = false;
         let conversationId = localStorage.getItem('conversationId') || crypto.randomUUID();
-        let userPrompt = ""; //Store the prompt
+        let userPrompt = localStorage.getItem('userPrompt') || "";
+        let selectedVoice = localStorage.getItem('selectedVoice') || 'aura-asteria-en'; // Default voice
+        localStorage.setItem('conversationId', conversationId);
+        systemPromptInput.value = userPrompt
+        voiceSelect.value = selectedVoice; // Set the initial value of the select
 
-
-        function displayTranscriptMessage(speaker, message) {
+        function displayTranscriptMessage(speaker, message, animate = true) {
             const messageElement = document.createElement('p');
-            messageElement.classList.add('text-gray-200', 'mb-2', 'animate__animated', 'animate__fadeIn');
+            messageElement.classList.add('text-gray-200', 'mb-2');
+            if (animate) {
+                messageElement.classList.add('animate__animated', 'animate__fadeIn'); // Only animate new messages
+            }
             messageElement.innerHTML = `<b>${speaker}:</b> ${message}`;
             debateTranscriptLog.appendChild(messageElement);
             debateTranscriptLog.scrollTop = debateTranscriptLog.scrollHeight;
@@ -229,10 +262,16 @@
                 alert("Please enter a prompt.");
                 return;
             }
-            speakButton.disabled = false; //Enable speak button after prompt is saved
+            localStorage.setItem('userPrompt', userPrompt)
+            speakButton.disabled = false;
             console.log("Prompt saved:", userPrompt);
-            alert("Prompt saved successfully!"); //Confirm to the user
+            alert("Prompt saved successfully!");
+        });
 
+        voiceSelect.addEventListener('change', () => {
+            selectedVoice = voiceSelect.value;
+            localStorage.setItem('selectedVoice', selectedVoice);
+            console.log("Selected voice:", selectedVoice);
         });
 
         function blobToBase64(blob) {
@@ -246,7 +285,7 @@
 
         async function sendAudioToBackend(audioBase64) {
             try {
-                const response = await fetch('http://localhost:8000/debate-turn/', {
+                const response = await fetch('https://ai-debate.onrender.com/debate-turn/', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -255,6 +294,7 @@
                         audio_data: audioBase64,
                         conversation_id: conversationId,
                         user_prompt: userPrompt,
+                        selected_voice: selectedVoice // Send the selected voice
                     }),
                 });
 
@@ -276,7 +316,7 @@
 
 
         function playAudioFromBase64(base64Audio) {
-            if(base64Audio){
+            if (base64Audio) {
                 const audio = new Audio(`data:audio/mpeg;base64,${base64Audio}`);
                 audio.play().catch(error => {
                     console.error("Error playing audio:", error);
@@ -287,6 +327,44 @@
                 setAiDebaterStatus("AI did not provide an audio response.");
             }
         }
+
+        // Function to load conversation history on page load
+        async function loadConversationHistory() {
+            try {
+                const response = await fetch(`https://ai-debate.onrender.com/conversation_history/${conversationId}`);
+                if (!response.ok) {
+                    if (response.status === 404) {
+                        displayTranscriptMessage("System", "No conversation history found.", false); // No animation for initial message
+                    } else {
+                        throw new Error(`HTTP error! Status: ${response.status}`);
+                    }
+                    return; // Exit if no history or an error occurred
+                }
+
+                const history = await response.json();
+                if (history && history.length > 0) {
+                    history.forEach(turn => {
+                        if (turn.user_audio) {
+                            displayTranscriptMessage("You", "Previous Audio Turn", false);
+                        }
+                        displayTranscriptMessage("AI", turn.ai_response, false);
+                    });
+                } else {
+                    displayTranscriptMessage("System", "No conversation history found.", false);
+                }
+            } catch (error) {
+                console.error("Error loading conversation history:", error);
+                displayTranscriptMessage("System", "Error loading conversation history.", false);
+            }
+        }
+
+        // Call loadConversationHistory when the page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            loadConversationHistory();
+            if (userPrompt !== "") {
+                speakButton.disabled = false;
+            }
+        });
 
         resetUIButtons();
     </script>
